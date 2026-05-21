@@ -100,6 +100,17 @@ Se o boleto e o cliente estiverem prontos para envio futuro, o PDF e um JSON ind
 boletos/prontos_envio/
 ```
 
+## Simular WhatsApp
+
+Enquanto o template estiver em analise, rode somente em dry-run:
+
+```powershell
+python src/whatsapp_dry_run.py
+```
+
+Com `WHATSAPP_DRY_RUN=true`, o sistema le os JSONs de `boletos/prontos_envio`, monta o payload do template `envio_boletos_clientes`, imprime no terminal e grava log como `SIMULADO`.
+Nenhuma chamada para a API da Meta e feita, e nenhum arquivo e movido.
+
 ## Saidas geradas
 
 - Logs: `logs/app.log`

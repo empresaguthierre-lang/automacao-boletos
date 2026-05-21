@@ -47,6 +47,15 @@ class DatabaseConfig:
         )
 
 
+@dataclass(frozen=True)
+class WhatsAppConfig:
+    dry_run: bool
+    template_name: str
+    language_code: str
+    phone_number_id: str
+    api_token: str
+
+
 def load_database_config() -> DatabaseConfig:
     load_dotenv(ENV_FILE)
 
@@ -65,6 +74,18 @@ def load_database_config() -> DatabaseConfig:
     return config
 
 
+def load_whatsapp_config() -> WhatsAppConfig:
+    load_dotenv(ENV_FILE)
+
+    return WhatsAppConfig(
+        dry_run=_env_bool("WHATSAPP_DRY_RUN", default=True),
+        template_name=os.getenv("WHATSAPP_TEMPLATE_NAME", "envio_boletos_clientes"),
+        language_code=os.getenv("WHATSAPP_LANGUAGE_CODE", "pt_BR"),
+        phone_number_id=os.getenv("WHATSAPP_PHONE_NUMBER_ID", ""),
+        api_token=os.getenv("WHATSAPP_API_TOKEN", ""),
+    )
+
+
 def _required_env(name: str) -> str:
     value = os.getenv(name)
     if not value:
@@ -73,7 +94,15 @@ def _required_env(name: str) -> str:
 
 
 def _allow_admin_user() -> bool:
-    value = os.getenv("DB_ALLOW_ADMIN_USER", "no").strip().lower()
+    return _env_bool("DB_ALLOW_ADMIN_USER", default=False)
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+
+    value = raw_value.strip().lower()
     return value in {"1", "true", "yes", "sim"}
 
 
