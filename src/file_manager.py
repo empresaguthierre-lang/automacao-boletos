@@ -10,13 +10,14 @@ from typing import Any
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PENDING_DIR = PROJECT_ROOT / "boletos" / "pendentes"
 PROCESSED_DIR = PROJECT_ROOT / "boletos" / "processados"
+REVIEW_DIR = PROJECT_ROOT / "boletos" / "revisao"
 ERROR_DIR = PROJECT_ROOT / "boletos" / "erro"
 LOGS_DIR = PROJECT_ROOT / "logs"
 RESULTS_FILE = LOGS_DIR / "resultados.json"
 
 
 def ensure_directories() -> None:
-    for directory in (PENDING_DIR, PROCESSED_DIR, ERROR_DIR, LOGS_DIR):
+    for directory in (PENDING_DIR, PROCESSED_DIR, REVIEW_DIR, ERROR_DIR, LOGS_DIR):
         directory.mkdir(parents=True, exist_ok=True)
 
 
@@ -27,6 +28,10 @@ def list_pending_pdfs() -> list[Path]:
 
 def move_to_processed(pdf_path: Path) -> Path:
     return _move_file(pdf_path, PROCESSED_DIR)
+
+
+def move_to_review(pdf_path: Path) -> Path:
+    return _move_file(pdf_path, REVIEW_DIR)
 
 
 def move_to_error(pdf_path: Path) -> Path:

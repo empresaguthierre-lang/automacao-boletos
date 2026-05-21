@@ -45,6 +45,7 @@ automacao-boletos/
   boletos/
     pendentes/
     processados/
+    revisao/
     erro/
   logs/
   src/
@@ -84,11 +85,18 @@ Se falhar, sera movido para:
 boletos/erro/
 ```
 
+Se o boleto for lido, mas o cliente nao for encontrado no banco ou estiver sem telefone, sera movido para:
+
+```text
+boletos/revisao/
+```
+
 ## Saidas geradas
 
 - Logs: `logs/app.log`
 - JSON consolidado: `logs/resultados.json`
 - Dados extraidos tambem aparecem no terminal
+- Na Etapa 2, o JSON final junta `boleto` e `cliente`
 
 Exemplo de saida:
 
