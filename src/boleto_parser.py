@@ -103,8 +103,13 @@ def _normalize_for_search(value: str) -> str:
 
 
 def _find_payer_block(lines: list[str]) -> list[str]:
+    """Find the payer block, even when the PDF text loses field labels."""
+    # Preferred path: explicit label "Pagador" or "Sacado".
     for index, line in enumerate(lines):
         normalized_line = _normalize_for_search(line)
+        if "recibo do pagador" in normalized_line:
+            continue
+
         if not any(marker in normalized_line for marker in PAYER_MARKERS):
             continue
 
@@ -118,10 +123,82 @@ def _find_payer_block(lines: list[str]) -> list[str]:
                 break
             block.append(next_line)
 
-        if any(CNPJ_PATTERN.search(block_line) for block_line in block):
+        if any(_find_cnpj_in_text_line(block_line) for block_line in block):
             return block
 
-    raise ValueError("Nao foi encontrado um CNPJ associado ao campo Pagador.")
+    # Fallback for PDFs where field labels are not extracted. Boleto layouts often
+    # repeat the payer in both the receipt area and the compensation slip.
+    candidates = _candidate_party_lines(lines)
+    if not candidates:
+        raise ValueError("Nao foi encontrado um CNPJ associado ao campo Pagador.")
+
+    by_cnpj: dict[str, list[tuple[int, str]]] = {}
+    for index, line, cnpj in candidates:
+        by_cnpj.setdefault(normalize_cnpj(cnpj), []).append((index, line))
+
+    _, best_occurrences = max(
+        by_cnpj.items(),
+        key=lambda item: (len(item[1]), item[1][0][0]),
+    )
+
+    if len(best_occurrences) >= 2:
+        return [best_occurrences[0][1]]
+
+    first_barcode_index = _first_digitable_line_index(lines)
+    for index, line, _ in candidates:
+        if first_barcode_index is None or index > first_barcode_index:
+            return [line]
+
+    return [candidates[0][1]]
+
+
+def _candidate_party_lines(lines: list[str]) -> list[tuple[int, str, str]]:
+    candidates: list[tuple[int, str, str]] = []
+    for index, line in enumerate(lines):
+        match = _find_cnpj_in_text_line(line)
+        if not match:
+            continue
+
+        normalized_line = _normalize_for_search(line)
+        if any(marker in normalized_line for marker in IGNORED_PARTY_MARKERS):
+            continue
+
+        name_part = _remove_cnpj(line)
+        name_part = re.sub(
+            r"\b(CNPJ|CPF|CPF/CNPJ|CNPJ/CPF)\b\s*:?,?",
+            "",
+            name_part,
+            flags=re.I,
+        )
+        name_part = re.sub(r"[^\w]+", " ", name_part).strip()
+        if len(name_part) < 3:
+            continue
+
+        candidates.append((index, line, match))
+
+    return candidates
+
+
+def _find_cnpj_in_text_line(line: str) -> str | None:
+    if _line_has_digitable_code(line):
+        return None
+
+    match = CNPJ_PATTERN.search(line)
+    if not match:
+        return None
+
+    return match.group(0)
+
+
+def _first_digitable_line_index(lines: list[str]) -> int | None:
+    for index, line in enumerate(lines):
+        if _line_has_digitable_code(line):
+            return index
+    return None
+
+
+def _line_has_digitable_code(line: str) -> bool:
+    return bool(BARCODE_DIGIT_PATTERN.search(" ".join(line.split())))
 
 
 def _extract_payer_cnpj(payer_block: list[str]) -> str:
@@ -132,11 +209,12 @@ def _extract_payer_cnpj(payer_block: list[str]) -> str:
             marker in _normalize_for_search(line) for marker in IGNORED_PARTY_MARKERS
         )
     ]
-    block_text = " ".join(safe_lines)
-    match = CNPJ_PATTERN.search(block_text)
-    if not match:
-        raise ValueError("Nao foi possivel extrair o CNPJ do pagador.")
-    return match.group(0)
+    for line in safe_lines:
+        cnpj = _find_cnpj_in_text_line(line)
+        if cnpj:
+            return cnpj
+
+    raise ValueError("Nao foi possivel extrair o CNPJ do pagador.")
 
 
 def _extract_payer_name(payer_block: list[str], cnpj: str) -> str:
@@ -153,7 +231,7 @@ def _extract_payer_name(payer_block: list[str], cnpj: str) -> str:
         cleaned = re.sub(r"\b(Pagador|Sacado|Pagador/Avalista)\b\s*:?", "", cleaned, flags=re.I)
         cleaned = re.sub(rf"\b{re.escape(cnpj_digits)}\b", "", cleaned)
         cleaned = re.sub(r"[-|:]{2,}", " ", cleaned)
-        cleaned = re.sub(r"\s+", " ", cleaned).strip(" -:|")
+        cleaned = re.sub(r"\s+", " ", cleaned).strip(" -:|,")
 
         if cleaned and not _looks_like_metadata(cleaned):
             candidates.append(cleaned)
@@ -185,27 +263,71 @@ def _looks_like_metadata(value: str) -> bool:
 
 
 def _extract_amount(text: str) -> str:
-    amount_labels = (
+    preferred_labels = (
         "valor do documento",
         "valor documento",
+        "(=) valor documento",
+    )
+    secondary_labels = (
         "valor cobrado",
+        "(=) valor cobrado",
         "valor",
     )
 
-    for line in text.splitlines():
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+
+    amount = _extract_amount_near_labels(lines, preferred_labels)
+    if amount:
+        return amount
+
+    amount = _extract_amount_near_labels(lines, secondary_labels)
+    if amount:
+        return amount
+
+    for line in lines:
         normalized_line = _normalize_for_search(line)
-        if not any(label in normalized_line for label in amount_labels):
+        if not any(label in normalized_line for label in preferred_labels + secondary_labels):
             continue
 
-        matches = MONEY_PATTERN.findall(line)
+        matches = _money_matches_from_value_line(line)
         if matches:
             return _normalize_money(matches[-1])
 
-    all_matches = MONEY_PATTERN.findall(text)
+    all_matches: list[str] = []
+    for line in lines:
+        all_matches.extend(_money_matches_from_value_line(line))
+
     if not all_matches:
         raise ValueError("Nao foi possivel extrair o valor do boleto.")
 
-    return _normalize_money(all_matches[-1])
+    return max((_normalize_money(match) for match in all_matches), key=float)
+
+
+def _extract_amount_near_labels(
+    lines: list[str],
+    labels: tuple[str, ...],
+) -> str | None:
+    for index, line in enumerate(lines):
+        normalized_line = _normalize_for_search(line)
+        if not any(label in normalized_line for label in labels):
+            continue
+
+        for candidate_line in lines[index : index + 6]:
+            matches = _money_matches_from_value_line(candidate_line)
+            if matches:
+                return _normalize_money(matches[-1])
+
+    return None
+
+
+def _money_matches_from_value_line(line: str) -> list[str]:
+    normalized_line = _normalize_for_search(line)
+    if _line_has_digitable_code(line):
+        return []
+    if "%" in line or "juros" in normalized_line or "multa" in normalized_line:
+        return []
+
+    return MONEY_PATTERN.findall(line)
 
 
 def _normalize_money(value: str) -> str:
@@ -215,6 +337,7 @@ def _normalize_money(value: str) -> str:
 
 
 def _extract_due_date(lines: list[str]) -> str:
+    # Preferred path: explicit "vencimento" label.
     for index, line in enumerate(lines):
         normalized_line = _normalize_for_search(line)
         if "vencimento" not in normalized_line:
@@ -229,7 +352,25 @@ def _extract_due_date(lines: list[str]) -> str:
             if next_match:
                 return next_match.group(0)
 
-    raise ValueError("Nao foi possivel extrair a data de vencimento.")
+    dates: list[str] = []
+    for line in lines:
+        dates.extend(DATE_PATTERN.findall(line))
+
+    if not dates:
+        raise ValueError("Nao foi possivel extrair a data de vencimento.")
+
+    counts: dict[str, int] = {}
+    for date in dates:
+        counts[date] = counts.get(date, 0) + 1
+
+    repeated_dates = [date for date, count in counts.items() if count >= 2]
+    candidates = repeated_dates or dates
+    return max(candidates, key=_date_sort_key)
+
+
+def _date_sort_key(date_value: str) -> tuple[int, int, int]:
+    day, month, year = date_value.split("/")
+    return int(year), int(month), int(day)
 
 
 def _extract_digitable_line(text: str) -> str:
