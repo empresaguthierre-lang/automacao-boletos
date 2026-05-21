@@ -5,7 +5,12 @@ import os
 
 from cliente_repository import ClienteNaoEncontradoError, buscar_cliente_por_cnpj
 from config import ConfigError
-from database_client import DatabaseConnectionError, DatabaseError, DatabaseTimeoutError
+from database_client import (
+    DatabaseAuthenticationError,
+    DatabaseConnectionError,
+    DatabaseError,
+    DatabaseTimeoutError,
+)
 
 
 TESTE_CNPJ_PADRAO = "03652501000493"
@@ -21,6 +26,8 @@ def main() -> None:
         print(f"Configuracao invalida: {error}")
     except ClienteNaoEncontradoError as error:
         print(f"Cliente nao encontrado: {error}")
+    except DatabaseAuthenticationError as error:
+        print(f"Falha de autenticacao no banco de dados: {error}")
     except DatabaseTimeoutError as error:
         print(f"Timeout no banco de dados: {error}")
     except DatabaseConnectionError as error:
