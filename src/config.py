@@ -54,6 +54,8 @@ class WhatsAppConfig:
     language_code: str
     phone_number_id: str
     api_token: str
+    graph_api_version: str
+    send_to_override: str
 
 
 def load_database_config() -> DatabaseConfig:
@@ -83,6 +85,8 @@ def load_whatsapp_config() -> WhatsAppConfig:
         language_code=os.getenv("WHATSAPP_LANGUAGE_CODE", "pt_BR"),
         phone_number_id=os.getenv("WHATSAPP_PHONE_NUMBER_ID", ""),
         api_token=os.getenv("WHATSAPP_API_TOKEN", ""),
+        graph_api_version=os.getenv("WHATSAPP_GRAPH_API_VERSION", "v23.0"),
+        send_to_override=os.getenv("WHATSAPP_SEND_TO_OVERRIDE", ""),
     )
 
 

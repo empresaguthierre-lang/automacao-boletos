@@ -111,6 +111,23 @@ python src/whatsapp_dry_run.py
 Com `WHATSAPP_DRY_RUN=true`, o sistema le os JSONs de `boletos/prontos_envio`, monta o payload do template `envio_boletos_clientes`, imprime no terminal e grava log como `SIMULADO`.
 Nenhuma chamada para a API da Meta e feita, e nenhum arquivo e movido.
 
+Para envio real de teste, configure no `.env`:
+
+```env
+WHATSAPP_DRY_RUN=false
+WHATSAPP_PHONE_NUMBER_ID=...
+WHATSAPP_API_TOKEN=...
+WHATSAPP_SEND_TO_OVERRIDE=5519997889004
+```
+
+Depois rode:
+
+```powershell
+python src/whatsapp_sender.py
+```
+
+Esse envio usa `WHATSAPP_SEND_TO_OVERRIDE`, entao todos os boletos vao para o numero de teste informado, sem mover arquivos.
+
 ## Saidas geradas
 
 - Logs: `logs/app.log`

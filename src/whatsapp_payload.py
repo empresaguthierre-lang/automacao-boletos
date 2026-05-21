@@ -8,6 +8,7 @@ from config import WhatsAppConfig
 def montar_payload_whatsapp(
     item_fila: dict[str, Any],
     config: WhatsAppConfig,
+    telefone_destino: str | None = None,
 ) -> dict[str, Any]:
     boleto = item_fila.get("boleto") or {}
     cliente = item_fila.get("cliente") or {}
@@ -15,7 +16,7 @@ def montar_payload_whatsapp(
     nome_cliente = str(cliente.get("nome") or boleto.get("nome_pagador") or "").strip()
     valor = str(boleto.get("valor") or "").strip()
     vencimento = str(boleto.get("vencimento") or "").strip()
-    telefone = str(item_fila.get("telefone_normalizado") or "").strip()
+    telefone = str(telefone_destino or item_fila.get("telefone_normalizado") or "").strip()
 
     _validar_campo_obrigatorio("telefone_normalizado", telefone)
     _validar_campo_obrigatorio("nome", nome_cliente)
