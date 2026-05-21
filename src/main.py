@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from boleto_parser import parse_boleto
 from cliente_repository import ClienteNaoEncontradoError, buscar_cliente_por_cnpj
@@ -11,11 +12,17 @@ from file_manager import (
     ensure_directories,
     list_pending_pdfs,
     move_to_error,
-    move_to_processed,
+    move_to_ready,
     move_to_review,
+    save_json_for_pdf,
 )
 from logger_config import setup_logger
 from pdf_reader import read_pdf_text
+from phone_utils import escolher_melhor_telefone
+
+
+STATUS_PRONTO = "PRONTO_PARA_ENVIO"
+STATUS_REVISAO = "REVISAO"
 
 
 def main() -> None:
@@ -31,29 +38,50 @@ def main() -> None:
 
     for pdf_path in pending_pdfs:
         logger.info("Processando: %s", pdf_path.name)
+        boleto: dict[str, str] | None = None
+        cliente: dict[str, str] | None = None
         try:
             text = read_pdf_text(pdf_path)
             boleto = parse_boleto(text)
             cliente = buscar_cliente_por_cnpj(boleto["cnpj_normalizado"])
+            telefone = escolher_melhor_telefone(cliente)
 
             resultado_final = {
                 "arquivo": pdf_path.name,
                 "boleto": boleto,
                 "cliente": cliente,
+                "telefone_original": telefone.original if telefone else "",
+                "telefone_normalizado": telefone.whatsapp if telefone else "",
+                "status": STATUS_PRONTO if telefone else STATUS_REVISAO,
             }
 
-            _validar_cliente_para_envio(cliente)
+            if not telefone:
+                resultado_final["motivo"] = "Cliente sem telefone valido para WhatsApp"
+                _salvar_revisao(pdf_path, resultado_final, logger)
+                continue
+
             append_result(resultado_final)
 
-            print(json.dumps(resultado_final, ensure_ascii=False, indent=2))
+            destination = move_to_ready(pdf_path)
+            json_path = save_json_for_pdf(destination, resultado_final)
 
-            destination = move_to_processed(pdf_path)
-            logger.info("PDF processado com sucesso: %s", destination)
+            _print_ready_summary(resultado_final)
+            logger.info("PDF pronto para envio: %s", destination)
+            logger.info("JSON pronto para envio: %s", json_path)
         except ClienteNaoEncontradoError as error:
             logger.warning("Cliente nao encontrado para %s: %s", pdf_path.name, error)
             try:
+                resultado_revisao = _build_review_result(
+                    pdf_path,
+                    boleto,
+                    cliente,
+                    "Cliente nao encontrado no ERP",
+                )
+                append_result(resultado_revisao)
                 destination = move_to_review(pdf_path)
+                json_path = save_json_for_pdf(destination, resultado_revisao)
                 logger.info("PDF movido para revisao: %s", destination)
+                logger.info("JSON de revisao salvo: %s", json_path)
             except Exception as move_error:
                 logger.exception(
                     "Nao foi possivel mover %s para revisao: %s",
@@ -109,14 +137,46 @@ def main() -> None:
                 )
 
 
-def _validar_cliente_para_envio(cliente: dict[str, str]) -> None:
-    telefones = [
-        cliente.get("fone_1", ""),
-        cliente.get("fone_2", ""),
-        cliente.get("fone_3", ""),
-    ]
-    if not any(telefone.strip() for telefone in telefones):
-        raise ValueError("Cliente encontrado, mas sem telefone cadastrado.")
+def _salvar_revisao(
+    pdf_path: Path,
+    result: dict[str, object],
+    logger,
+) -> None:
+    append_result(result)
+    destination = move_to_review(pdf_path)
+    json_path = save_json_for_pdf(destination, result)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    logger.info("PDF movido para revisao: %s", destination)
+    logger.info("JSON de revisao salvo: %s", json_path)
+
+
+def _build_review_result(
+    pdf_path: Path,
+    boleto: dict[str, str] | None,
+    cliente: dict[str, str] | None,
+    motivo: str,
+) -> dict[str, object]:
+    return {
+        "arquivo": pdf_path.name,
+        "boleto": boleto or {},
+        "cliente": cliente or {},
+        "telefone_original": "",
+        "telefone_normalizado": "",
+        "status": STATUS_REVISAO,
+        "motivo": motivo,
+    }
+
+
+def _print_ready_summary(result: dict[str, object]) -> None:
+    cliente = result["cliente"]
+    if not isinstance(cliente, dict):
+        cliente = {}
+
+    print(f"Cliente encontrado: {cliente.get('nome', '')}")
+    print(f"Telefone escolhido: {result.get('telefone_original', '')}")
+    print(f"Telefone WhatsApp: {result.get('telefone_normalizado', '')}")
+    print(f"Status: {result.get('status', '')}")
+    print()
 
 
 if __name__ == "__main__":

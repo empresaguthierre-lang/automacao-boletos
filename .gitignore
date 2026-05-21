@@ -16,6 +16,7 @@ logs/resultados.json
 
 # Input and processed PDFs
 boletos/**/*.pdf
+boletos/**/*.json
 
 # Windows
 Thumbs.db

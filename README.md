@@ -48,6 +48,7 @@ automacao-boletos/
     pendentes/
     processados/
     revisao/
+    prontos_envio/
     erro/
   logs/
   src/
@@ -91,6 +92,12 @@ Se o boleto for lido, mas o cliente nao for encontrado no banco ou estiver sem t
 
 ```text
 boletos/revisao/
+```
+
+Se o boleto e o cliente estiverem prontos para envio futuro, o PDF e um JSON individual serao salvos em:
+
+```text
+boletos/prontos_envio/
 ```
 
 ## Saidas geradas
