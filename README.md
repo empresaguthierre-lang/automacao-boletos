@@ -32,6 +32,8 @@ Permissao: somente SELECT
 
 Nao use `sa`, usuario administrador ou usuario do ERP.
 
+Para testes locais emergenciais, existe `DB_ALLOW_ADMIN_USER=yes`, mas deixe `no` por padrao e volte para um usuario somente leitura antes de rodar em producao.
+
 Para testar a conexao:
 
 ```powershell

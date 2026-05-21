@@ -61,7 +61,7 @@ def load_database_config() -> DatabaseConfig:
         timeout=int(os.getenv("DB_TIMEOUT", "30")),
     )
 
-    _reject_admin_user(config.user)
+    _reject_admin_user(config.user, _allow_admin_user())
     return config
 
 
@@ -72,8 +72,13 @@ def _required_env(name: str) -> str:
     return value
 
 
-def _reject_admin_user(user: str) -> None:
-    if user.strip().lower() == "sa":
+def _allow_admin_user() -> bool:
+    value = os.getenv("DB_ALLOW_ADMIN_USER", "no").strip().lower()
+    return value in {"1", "true", "yes", "sim"}
+
+
+def _reject_admin_user(user: str, allow_admin_user: bool) -> None:
+    if user.strip().lower() == "sa" and not allow_admin_user:
         raise ConfigError(
             "Nao use o usuario sa. Crie um usuario exclusivo com permissao somente SELECT."
         )
