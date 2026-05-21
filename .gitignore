@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Environment
+.env
+
+# Runtime outputs
+logs/*.log
+logs/resultados.json
+
+# Input and processed PDFs
+boletos/**/*.pdf
+
+# Windows
+Thumbs.db
+Desktop.ini
