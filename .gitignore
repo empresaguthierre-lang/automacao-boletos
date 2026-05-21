@@ -7,6 +7,9 @@ venv/
 # Environment
 .env
 
+# Editor
+.vscode/
+
 # Runtime outputs
 logs/*.log
 logs/resultados.json

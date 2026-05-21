@@ -18,6 +18,26 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+## Configurar banco SQL Server
+
+Copie `.env.example` para `.env` e preencha os dados do SQL Server no seu PC.
+O arquivo `.env` nao deve ser commitado.
+
+Use um usuario exclusivo para esta automacao:
+
+```text
+Usuario: automacao_boletos
+Permissao: somente SELECT
+```
+
+Nao use `sa`, usuario administrador ou usuario do ERP.
+
+Para testar a conexao:
+
+```powershell
+python src/teste_conexao.py
+```
+
 ## Estrutura
 
 ```text
