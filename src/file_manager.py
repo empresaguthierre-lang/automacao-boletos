@@ -12,6 +12,7 @@ PENDING_DIR = PROJECT_ROOT / "boletos" / "pendentes"
 PROCESSED_DIR = PROJECT_ROOT / "boletos" / "processados"
 REVIEW_DIR = PROJECT_ROOT / "boletos" / "revisao"
 READY_DIR = PROJECT_ROOT / "boletos" / "prontos_envio"
+TEST_SENT_DIR = PROJECT_ROOT / "boletos" / "enviados_teste"
 ERROR_DIR = PROJECT_ROOT / "boletos" / "erro"
 LOGS_DIR = PROJECT_ROOT / "logs"
 RESULTS_FILE = LOGS_DIR / "resultados.json"
@@ -23,6 +24,7 @@ def ensure_directories() -> None:
         PROCESSED_DIR,
         REVIEW_DIR,
         READY_DIR,
+        TEST_SENT_DIR,
         ERROR_DIR,
         LOGS_DIR,
     ):

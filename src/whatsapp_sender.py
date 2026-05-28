@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -40,10 +41,17 @@ def main() -> None:
     for json_path in json_files:
         try:
             item_fila = _ler_json(json_path)
+            pdf_path = _pdf_path_for_json(json_path)
+            media_id = upload_media_pdf(pdf_path, config)
+            logger.info("PDF enviado para Meta | arquivo=%s", pdf_path.name)
+            logger.info("media_id retornado | arquivo=%s | media_id=%s", pdf_path.name, media_id)
+
             payload = montar_payload_whatsapp(
                 item_fila,
                 config,
                 telefone_destino=telefone_teste,
+                media_id=media_id,
+                filename=pdf_path.name,
             )
             response = _enviar_payload(payload, config)
             logger.info(
@@ -72,6 +80,77 @@ def _validar_envio_real(config) -> None:
         raise ConfigError("Variavel obrigatoria ausente no .env: WHATSAPP_API_TOKEN")
 
 
+def upload_media_pdf(pdf_path: Path, config) -> str:
+    if not pdf_path.exists():
+        raise FileNotFoundError(f"PDF nao encontrado para upload: {pdf_path}")
+
+    url = (
+        f"https://graph.facebook.com/{config.graph_api_version}/"
+        f"{config.phone_number_id}/media"
+    )
+    response = _post_multipart_pdf(
+        url=url,
+        token=config.api_token,
+        pdf_path=pdf_path,
+        fields={
+            "messaging_product": "whatsapp",
+            "type": "application/pdf",
+        },
+    )
+    media_id = str(response.get("id") or "").strip()
+    if not media_id:
+        raise RuntimeError(f"Meta API nao retornou media_id: {response}")
+
+    return media_id
+
+
+def _post_multipart_pdf(
+    url: str,
+    token: str,
+    pdf_path: Path,
+    fields: dict[str, str],
+) -> dict[str, Any]:
+    boundary = f"----automacao-boletos-{uuid.uuid4().hex}"
+    body_parts: list[bytes] = []
+
+    for name, value in fields.items():
+        body_parts.extend(
+            [
+                f"--{boundary}\r\n".encode("utf-8"),
+                f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode("utf-8"),
+                f"{value}\r\n".encode("utf-8"),
+            ]
+        )
+
+    file_bytes = pdf_path.read_bytes()
+    body_parts.extend(
+        [
+            f"--{boundary}\r\n".encode("utf-8"),
+            (
+                'Content-Disposition: form-data; name="file"; '
+                f'filename="{pdf_path.name}"\r\n'
+            ).encode("utf-8"),
+            b"Content-Type: application/pdf\r\n\r\n",
+            file_bytes,
+            b"\r\n",
+            f"--{boundary}--\r\n".encode("utf-8"),
+        ]
+    )
+    body = b"".join(body_parts)
+
+    request = urllib.request.Request(
+        url,
+        data=body,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+        },
+    )
+
+    return _send_request(request)
+
+
 def _enviar_payload(payload: dict[str, Any], config) -> dict[str, Any]:
     url = (
         f"https://graph.facebook.com/{config.graph_api_version}/"
@@ -88,6 +167,10 @@ def _enviar_payload(payload: dict[str, Any], config) -> dict[str, Any]:
         },
     )
 
+    return _send_request(request)
+
+
+def _send_request(request: urllib.request.Request) -> dict[str, Any]:
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             response_body = response.read().decode("utf-8")
@@ -107,6 +190,10 @@ def _ler_json(json_path: Path) -> dict[str, Any]:
         raise ValueError("JSON da fila deve conter um objeto.")
 
     return loaded
+
+
+def _pdf_path_for_json(json_path: Path) -> Path:
+    return json_path.with_suffix(".pdf")
 
 
 if __name__ == "__main__":

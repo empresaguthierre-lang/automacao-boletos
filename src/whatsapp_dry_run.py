@@ -30,7 +30,13 @@ def main() -> None:
     for json_path in json_files:
         try:
             item_fila = _ler_json(json_path)
-            payload = montar_payload_whatsapp(item_fila, config)
+            pdf_path = json_path.with_suffix(".pdf")
+            payload = montar_payload_whatsapp(
+                item_fila,
+                config,
+                media_id="DRY_RUN_MEDIA_ID",
+                filename=pdf_path.name,
+            )
             print(json.dumps(payload, ensure_ascii=False, indent=2))
             logger.info(
                 "SIMULADO | arquivo=%s | telefone=%s | template=%s",

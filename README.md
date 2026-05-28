@@ -49,6 +49,7 @@ automacao-boletos/
     processados/
     revisao/
     prontos_envio/
+    enviados_teste/
     erro/
   logs/
   src/
@@ -127,6 +128,7 @@ python src/whatsapp_sender.py
 ```
 
 Esse envio usa `WHATSAPP_SEND_TO_OVERRIDE`, entao todos os boletos vao para o numero de teste informado, sem mover arquivos.
+A pasta `boletos/enviados_teste` ja existe para uma etapa futura, mas nao e usada automaticamente ainda.
 
 ## Saidas geradas
 
